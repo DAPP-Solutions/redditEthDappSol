@@ -38,45 +38,25 @@ CONTRACT_START()
 
     TABLE redditusers {
         string redditname; //e.g. "/u/username"
-        string ethaddress;
-        string primary_key()const { return redditname; }
+        string ethaddress; //create if not exists
+        string primary_key()const { return ethaddress; }
     };
     typedef dapp::multi_index<"redditusers"_n, redditusers> redditusers_t;
-
-    TABLE subreddits {
-        string subname; //e.g. "/r/ethereum"
-        string iconbsf; //base64 icon or icon URL?
-        asset tokendef; //symbol, total supply
-        string primary_key()const { return subname; }
-    };
-    typedef dapp::multi_index<"subreddits"_n, subreddits> subreddits_t;
-
-    TABLE subsuser{
-        string redditname;
-        string subname;
-        bool autosub; //auto-burn tokens for subscription?
-        uint32_t regtime; //uint32_t eosio::time_point::sec_since_epoch() const - time user registered
-        uint32_t lastsub; //last time user paid for subscription, 30+ days = burn tokens if auto is on
-        asset balance; //current balance of this subreddit's token for the user
-        asset totalbalance; //total balance the user has ever owned
-        asset holdbalance; //temp balance when user is withdrawing, but not yet hit ETH commit
-        string primary_key()const {return redditname; }
-    };
-    typedef dapp::multi_index<"subsuser"_n, subsuser> subsuser_t;
 
     TABLE subscomm{ //used to get all users subbed to a community - subsuser holds balances etc.
         string subname;
         string redditname;
+        string ethaddress;
         string primary_key()const {return subname; }
     };
     typedef dapp::multi_index<"subscomm"_n, subscomm> subscomm_t;
 
     struct ethqueue{
-        string reddituser;
+        string redditname;
         string ethaddress;
         string subname;
         asset amount;
-        EOSLIB_SERIALIZE(ethqueue, (reddituser)(ethaddress)(subname)(amount));
+        EOSLIB_SERIALIZE(ethqueue, (redditname)(ethaddress)(subname)(amount));
     };
 
     TABLE queuetokens{
@@ -88,86 +68,115 @@ CONTRACT_START()
     };
     typedef dapp::multi_index<"queuetokens"_n, queuetokens> queuetokens_t;
 
-    // std::string string_to_hex(std::string tohexa){
-    //     std::ostringstream result;
-    //     result << std::setw(2) << std::setfill('0') << std::hex << std::uppercase;
-    //     std::copy(tohexa.begin(), tohexa.end(), std::ostream_iterator<unsigned int>(result, " "));
-    //     std::cout << tohexa << ":" << result.str() << std::endl;
-    //     return result.str();
-    // }
-
-    [[eosio::action]] void usetokeosio(string updatestring){
-        require_auth(_self);//ETH signing?
-        stats_def statstable(_self, _self.value);
-        stats newstats;
-        if(!statstable.exists()){
-          statstable.set(newstats, _self);
-        }
-        else{
-          newstats = statstable.get();
-        }
-        newstats.teststring = updatestring;
-        statstable.set(newstats, _self);
-        return;
-    }
-
-    void updatestats(string updatestring){
-        stats_def statstable(_self, _self.value);
-        stats newstats;
-        if(!statstable.exists()){
-          statstable.set(newstats, _self);
-        }
-        else{
-          newstats = statstable.get();
-        }
-        newstats.anotherstring = updatestring;
-        statstable.set(newstats, _self);
-        return;
-    }
-
-    void updatestaters(string updatestring, string anotherstring){
-        stats_def statstable(_self, _self.value);
-        stats newstats;
-        if(!statstable.exists()){
-          statstable.set(newstats, _self);
-        }
-        else{
-          newstats = statstable.get();
-        }
-        newstats.teststring = updatestring;
-        newstats.anotherstring = anotherstring;
-        statstable.set(newstats, _self);
-        return;
-    }
-
-    [[eosio::action]] void testget(std::vector<char>  uri, std::vector<char> expectedfield) {
-    /* USE EOSIO'S ASSERTION TO CHECK FOR REQUIRED THREHSHOLD OF ORACLES IS MET */
-        require_auth(_self);
-        eosio::check(getURI(uri, [&]( auto& results ) { 
-            eosio::check(results.size() > 0, "require multiple results for consensus");
-            auto itr = results.begin();
-            auto first = itr->result;
-            ++itr;
-            /* SET CONSENSUS LOGIC FOR RESULTS */
-            while(itr != results.end()) {
-                eosio::check(itr->result == first, "consensus failed");
-                ++itr;
-            }
-            return first;
-        }) == expectedfield, "wrong data");
-    }
-    
-    struct testuri{
-        std::vector<char> uri;
-        EOSLIB_SERIALIZE(testuri, (uri));
+    TABLE subsuser{
+        string redditname;
+        string subname;
+        string ethaddress;
+        bool autosub; //auto-burn tokens for subscription?
+        uint32_t regtime; //uint32_t eosio::time_point::sec_since_epoch() const - time user registered
+        uint32_t lastsub; //last time user paid for subscription, 30+ days = burn tokens if auto is on
+        asset balance; //current balance of this subreddit's token for the user
+        asset totalbalance; //total balance the user has ever owned
+        asset holdbalance; //temp balance when user is withdrawing, but not yet hit ETH commit
+        string primary_key()const {return ethaddress; }
     };
+    typedef dapp::multi_index<"subsuser"_n, subsuser> subsuser_t;
 
-    [[eosio::action]] void testrnd(std::vector<char> uri) {
+    TABLE subreddits {
+        string subname; //e.g. "/r/ethereum"
+        string configurl; //url to call for client-side variables with oracles if needed
+        asset tokendef; //symbol, total supply
+        string primary_key()const { return subname; }
+    };
+    typedef dapp::multi_index<"subreddits"_n, subreddits> subreddits_t;
+
+    [[eosio::action]] void burntokens(string user, string sub, int64_t amount){
         require_auth(_self);
-        getURI(uri, [&]( auto& results ) { 
-        return results[0].result;
-        });
+        subsuser_t subsusers(_self, _self.value);
+        auto fromuser = subsusers.find(from);
+        if( fromuser == subusers.end()){
+            eosio::check(false,"No User Found");
+        }else{
+            for ( auto itr = fromuser.begin(); itr != fromuser.end(); itr++ ) {
+                if(itr-> subname == sub){
+                    subsusers.modify( *fromuser, eosio::same_payer, [&]( auto& a ) {
+                        a.balance -= amount;
+                    });
+                }
+            }
+        }
     }
+
+    [[eosio::action]] void sendtoken(string from, string to, string sub, asset amount){
+        require_auth(_self);
+        //ETH signing?
+        subsuser_t subsusers(_self, _self.value);
+        auto fromuser = subsusers.find(from);
+        if( fromuser == subusers.end()){
+            eosio::check(false,"No User Found");
+        }else{
+            for ( auto itr = fromuser.begin(); itr != fromuser.end(); itr++ ) {
+                if(itr-> subname == sub){
+                    subsusers.modify( *fromuser, eosio::same_payer, [&]( auto& a ) {
+                        a.balance -= value;
+                    });
+                }
+            }
+        }
+        auto touser = subusers.find(to);
+        if( touser == subusers.end()){
+            eosio::asset nohold = eosio::asset::asset(0, amount.symbol);
+            subsusers.emplace(_self, [&]( auto& a ){
+                a.balance = amount;
+                a.subname = sub;
+                a.redditname = to;
+                a.ethaddress = ""; //generation method?
+                a.autosub = false;
+                a.regtime = eosio::time_point::sec_since_epoch();
+                a.lastsub = eosio::time_point::sec_since_epoch() - 1;
+                a.totalbalance = amount;
+                a.holdbalance = nohold;
+            });
+        }else{
+             for ( auto itr = fromuser.begin(); itr != fromuser.end(); itr++ ) {
+                if(itr-> subname == sub){
+                    subsusers.modify( *fromuser, eosio::same_payer, [&]( auto& a ) {
+                        a.balance += value;
+                    });
+                }
+            }
+        }
+    }
+
+    [[eosio::action]] void addcommunity(string subname, string symbol, string url){
+        require_auth(_self);
+        subreddits_t comms(_self, _self.value);
+        auto doesexist = comms.find(from);
+        if( fromuser == subusers.end()){
+            eosio::asset tokendef = eosio::asset::asset(0, symbol);
+            comms.emplace(_self, [&]( auto& a ){
+                a.subname = subname;
+                a.configurl = url;
+                a.tokendef = tokendef;
+            });
+        }else{
+           eosio::check(false,"Community Already Exists");
+        }
+    }
+
+    void add_cold_balance( name owner, extended_asset value){
+            cold_accounts_t to_acnts( _self, owner.value );
+            auto to = to_acnts.find( value.contract.value );
+            if( to == to_acnts.end() ) {
+                to_acnts.emplace(_self, [&]( auto& a ){
+                    a.balance = value;
+                });
+            } else {
+                to_acnts.modify( *to, eosio::same_payer, [&]( auto& a ) {
+                    a.balance += value;
+                });
+           }
+     }
 
     TABLE account {
         extended_asset balance;
@@ -195,4 +204,4 @@ CONTRACT_START()
 
     VACCOUNTS_APPLY()
     };
-    EOSIO_DISPATCH_SVC(CONTRACT_NAME(),(usetokeosio))
+    EOSIO_DISPATCH_SVC(CONTRACT_NAME(),(sendtoken)(addcommunity)(burntokens))
