@@ -1,3 +1,4 @@
+
 #include "../dappservices/multi_index.hpp"
 #include "../dappservices/log.hpp"
 #include "../dappservices/oracle.hpp"
@@ -10,6 +11,7 @@
 #include <sstream>
 #include <iterator>
 #include <iomanip>
+#define USE_ADVANCED_IPFS
 #define DAPPSERVICES_ACTIONS() \
   XSIGNAL_DAPPSERVICE_ACTION \
   IPFS_DAPPSERVICE_ACTIONS \
@@ -29,6 +31,17 @@ CONTRACT_START()
         return false;
     }
 
+    std::string string_to_hex(const std::string& in) {
+        std::stringstream ss;
+
+        ss << std::hex << std::setfill('0');
+        for (size_t i = 0; in.length() > i; ++i) {
+            ss << std::setw(2) << static_cast<unsigned int>(static_cast<unsigned char>(in[i]));
+        }
+
+        return ss.str(); 
+    }
+
     TABLE stats {
         string   teststring = "";
         string anotherstring = "";
@@ -36,18 +49,12 @@ CONTRACT_START()
 
     typedef eosio::singleton<"stats"_n, stats> stats_def;
 
-    TABLE redditusers {
-        string redditname; //e.g. "/u/username"
-        string ethaddress; //create if not exists
-        string primary_key()const { return ethaddress; }
-    };
-    typedef dapp::multi_index<"redditusers"_n, redditusers> redditusers_t;
-
     TABLE subscomm{ //used to get all users subbed to a community - subsuser holds balances etc.
         string subname;
         string redditname;
         string ethaddress;
-        string primary_key()const {return subname; }
+        capi_checksum256 ethcs;
+        capi_checksum256 primary_key()const {return ethcs; }
     };
     typedef dapp::multi_index<"subscomm"_n, subscomm> subscomm_t;
 
@@ -69,32 +76,62 @@ CONTRACT_START()
     typedef dapp::multi_index<"queuetokens"_n, queuetokens> queuetokens_t;
 
     TABLE subsuser{
+        capi_checksum256 ethcs;
+        string ethaddress;
         string redditname;
         string subname;
-        string ethaddress;
         bool autosub; //auto-burn tokens for subscription?
         uint32_t regtime; //uint32_t eosio::time_point::sec_since_epoch() const - time user registered
         uint32_t lastsub; //last time user paid for subscription, 30+ days = burn tokens if auto is on
         asset balance; //current balance of this subreddit's token for the user
         asset totalbalance; //total balance the user has ever owned
         asset holdbalance; //temp balance when user is withdrawing, but not yet hit ETH commit
-        string primary_key()const {return ethaddress; }
+        capi_checksum256 primary_key()const {return ethcs; }
     };
     typedef dapp::multi_index<"subsuser"_n, subsuser> subsuser_t;
 
     TABLE subreddits {
+        capi_checksum256 ethcs;
+        string ethadd;
         string subname; //e.g. "/r/ethereum"
+        uint64_t subhex; //hex version of community name for indexing
         string configurl; //url to call for client-side variables with oracles if needed
         asset tokendef; //symbol, total supply
-        string primary_key()const { return subname; }
+        capi_checksum256 primary_key()const { return ethcs; }
     };
     typedef dapp::multi_index<"subreddits"_n, subreddits> subreddits_t;
 
-    [[eosio::action]] void burntokens(string user, string sub, int64_t amount){
+     TABLE redditusers {
+        capi_checksum256 ethcs;
+        string redditname; //e.g. "/u/username"
+        string ethaddress; //create if not exists
+        capi_checksum256 primary_key()const { return ethcs; }
+    };
+    typedef dapp::multi_index<"redditusers"_n, redditusers> redditusers_t;
+
+    [[eosio::action]] void createuser(string url, string ethaddress){
+        require_auth(_self);
+        redditusers_t redusers(_self, _self.value);
+        capi_checksum256 sum{};
+        sha256(const_cast<char*>(ethaddress.c_str()), ethaddress.size(), &sum);
+        auto doesexist = redusers.find(sum)
+         if( fromuser == redusers.end()){
+            redusers.emplace(_self, [&]( auto& a ){
+                a.ethcs = sum;
+                a.redditname = url;
+                a.ethaddress = ethaddress;
+            });
+        }else{
+            eosio::check(false,"User Already Exists");
+        };
+    }   
+
+    [[eosio::action]] void spendtokens(string user, string sub, int64_t amount){
         require_auth(_self);
         subsuser_t subsusers(_self, _self.value);
-        auto fromuser = subsusers.find(from);
-        if( fromuser == subusers.end()){
+        //uint64_t userint = 
+        auto fromuser = subsusers.find(user);
+        if( fromuser == subsusers.end()){
             eosio::check(false,"No User Found");
         }else{
             for ( auto itr = fromuser.begin(); itr != fromuser.end(); itr++ ) {
@@ -112,13 +149,13 @@ CONTRACT_START()
         //ETH signing?
         subsuser_t subsusers(_self, _self.value);
         auto fromuser = subsusers.find(from);
-        if( fromuser == subusers.end()){
+        if( fromuser == subsusers.end()){
             eosio::check(false,"No User Found");
         }else{
             for ( auto itr = fromuser.begin(); itr != fromuser.end(); itr++ ) {
                 if(itr-> subname == sub){
                     subsusers.modify( *fromuser, eosio::same_payer, [&]( auto& a ) {
-                        a.balance -= value;
+                        a.balance -= amount.value;
                     });
                 }
             }
@@ -164,20 +201,6 @@ CONTRACT_START()
         }
     }
 
-    void add_cold_balance( name owner, extended_asset value){
-            cold_accounts_t to_acnts( _self, owner.value );
-            auto to = to_acnts.find( value.contract.value );
-            if( to == to_acnts.end() ) {
-                to_acnts.emplace(_self, [&]( auto& a ){
-                    a.balance = value;
-                });
-            } else {
-                to_acnts.modify( *to, eosio::same_payer, [&]( auto& a ) {
-                    a.balance += value;
-                });
-           }
-     }
-
     TABLE account {
         extended_asset balance;
         uint64_t primary_key()const { return balance.contract.value; }
@@ -192,16 +215,16 @@ CONTRACT_START()
     };
     typedef eosio::multi_index<"vaccounts"_n, shardbucket> cold_accounts_t_abi;
 
-    string to_hex( const char* d, uint32_t s ) 
+    string to_hex( const char* d, uint64_t s ) 
     {
         string r;
         const char* to_hex="0123456789abcdef";
         uint8_t* c = (uint8_t*)d;
-        for( uint32_t i = 0; i < s; ++i )
+        for( uint64_t i = 0; i < s; ++i )
             (r += to_hex[(c[i]>>4)]) += to_hex[(c[i] &0x0f)];
         return r;
     }
 
     VACCOUNTS_APPLY()
     };
-    EOSIO_DISPATCH_SVC(CONTRACT_NAME(),(sendtoken)(addcommunity)(burntokens))
+    EOSIO_DISPATCH_SVC(CONTRACT_NAME(),(sendtoken)(addcommunity))
