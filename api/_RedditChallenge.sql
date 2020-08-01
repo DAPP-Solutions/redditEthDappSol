@@ -31,6 +31,17 @@ create TABLE approvequeue (
 	amount float,
 	lastrun int,
 	dateadded TIMESTAMP NOT NULL
+);
+
+create TABLE redditposts (
+	id serial PRIMARY KEY,
+	redditaccount text,
+	subname text,
+	amount float,
+	karma int,
+	dateadded TIMESTAMP NOT NULL
 )
 
-select * from accounts
+select * from accounts order by id desc limit 10
+update accounts set account = substr(pubkey, 0, 12)
+select * from subscriptions

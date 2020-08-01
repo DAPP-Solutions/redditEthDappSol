@@ -1,0 +1,20 @@
+const ecc = require('eosjs-ecc');
+const Web3EthAccounts = require('web3-eth-accounts');
+const web3_eth_accounts = new Web3EthAccounts();
+const bs58 = require('bs58');
+
+console.log('Testing one private key to both an ETH address and an EOS Key Pair');
+console.log('A private key is just a random number between 1 and 115792089237316195423570985008687907852837564279074904382605163141518161494337');
+console.log('Ethereum likes to use Hex to show and store the value with th customary 0x prefix to make it obvious it`s a hex value. It is 64 characters long after the 0x prefix and all characters are in the range: [0-9A-F]');
+const EthHexPrivKey = '0xAFF123987698787687558768768766876876876687687687ABF5465465444CBF';
+console.log('\nHere is an example: ' + EthHexPrivKey );
+const EosWifPrivKey = ecc.PrivateKey.fromHex(EthHexPrivKey.substr(2)).toWif();
+console.log('\nEOS uses the same mechanism for private keys, just random numbers in the same huge range, but they prefer a presentation similar to Bitcoin, the wif - Wallet Import Format');
+console.log('\nHere is the exact same value for the private key but converted to the WIF format: ' + EosWifPrivKey);
+console.log('\nNow, each blockchain library can cnvert the same private key to a publick key or address');
+const EosPubKey = ecc.privateToPublic(EosWifPrivKey);
+const EthAccount = web3_eth_accounts.create(EthHexPrivKey);
+console.log('EOS public key: ' + EosPubKey);
+console.log('ETH address   : ' + EthAccount.address);
+const wifBackToHex = bs58.decode(EosWifPrivKey).toString('hex').slice(2, -8);
+console.log('Converting from WIF back to HEX is possible, just need to truncate the prefix and suffix: ' + wifBackToHex);

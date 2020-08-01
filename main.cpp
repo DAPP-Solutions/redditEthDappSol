@@ -11,7 +11,7 @@
 #include <sstream>
 #include <iterator>
 #include <iomanip>
-#define USE_ADVANCED_IPFS
+#define USE_ADVANCED_IPFS 
 #define DAPPSERVICES_ACTIONS() \
   XSIGNAL_DAPPSERVICE_ACTION \
   IPFS_DAPPSERVICE_ACTIONS \
@@ -53,10 +53,11 @@ CONTRACT_START()
         string subname;
         string redditname;
         string ethaddress;
-        capi_checksum256 ethcs;
-        capi_checksum256 primary_key()const {return ethcs; }
+        checksum256 ethcs;
+        checksum256 primary_key()const {return ethcs; }
     };
-    typedef dapp::multi_index<"subscomm"_n, subscomm> subscomm_t;
+    //typedef dapp::multi_index<"subscomm"_n, subscomm> subscomm_t;
+    typedef dapp::advanced_multi_index<"subscomm"_n, subscomm, checksum256> subscomm_t;
 
     struct ethqueue{
         string redditname;
@@ -74,9 +75,10 @@ CONTRACT_START()
         uint64_t primary_key()const {return queuenum; }
     };
     typedef dapp::multi_index<"queuetokens"_n, queuetokens> queuetokens_t;
+    
 
     TABLE subsuser{
-        capi_checksum256 ethcs;
+        checksum256 ethcs;
         string ethaddress;
         string redditname;
         string subname;
@@ -86,33 +88,36 @@ CONTRACT_START()
         asset balance; //current balance of this subreddit's token for the user
         asset totalbalance; //total balance the user has ever owned
         asset holdbalance; //temp balance when user is withdrawing, but not yet hit ETH commit
-        capi_checksum256 primary_key()const {return ethcs; }
+        checksum256 primary_key()const {return ethcs; }
     };
-    typedef dapp::multi_index<"subsuser"_n, subsuser> subsuser_t;
+    //typedef dapp::multi_index<"subsuser"_n, subsuser> subsuser_t;
+    typedef dapp::advanced_multi_index<"subsuser"_n, subsuser, checksum256> subsuser_t;
 
     TABLE subreddits {
-        capi_checksum256 ethcs;
+        checksum256 ethcs;
         string ethadd;
         string subname; //e.g. "/r/ethereum"
         uint64_t subhex; //hex version of community name for indexing
         string configurl; //url to call for client-side variables with oracles if needed
         asset tokendef; //symbol, total supply
-        capi_checksum256 primary_key()const { return ethcs; }
+        checksum256 primary_key()const { return ethcs; }
     };
-    typedef dapp::multi_index<"subreddits"_n, subreddits> subreddits_t;
+    //typedef dapp::multi_index<"subreddits"_n, subreddits> subreddits_t;
+    typedef dapp::advanced_multi_index<"subreddits"_n, subreddits, checksum256> subreddits_t; 
 
      TABLE redditusers {
-        capi_checksum256 ethcs;
+        checksum256 ethcs;
         string redditname; //e.g. "/u/username"
         string ethaddress; //create if not exists
-        capi_checksum256 primary_key()const { return ethcs; }
+        checksum256 primary_key()const { return ethcs; }
     };
-    typedef dapp::multi_index<"redditusers"_n, redditusers> redditusers_t;
+    //typedef dapp::multi_index<"redditusers"_n, redditusers> redditusers_t;
+    typedef dapp::advanced_multi_index<"redditusers"_n, redditusers, checksum256> redditusers_t; 
 
     [[eosio::action]] void createuser(string url, string ethaddress){
         require_auth(_self);
         redditusers_t redusers(_self, _self.value);
-        capi_checksum256 sum{};
+        checksum256 sum{};
         sha256(const_cast<char*>(ethaddress.c_str()), ethaddress.size(), &sum);
         auto doesexist = redusers.find(sum)
          if( fromuser == redusers.end()){
