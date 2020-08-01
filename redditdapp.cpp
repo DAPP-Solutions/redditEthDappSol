@@ -213,19 +213,7 @@ static eosio::checksum256 to_key(string pkeystring)
   const uint64_t *ui64 = reinterpret_cast<const uint64_t *>(&pkeyadd);
   return eosio::checksum256::make_from_word_sequence<uint64_t>(ui64[0], ui64[1], ui64[2], ui64[3]);
 }
-/////////////////////////////////////////
-// CHANGES MADE -
 
-// 1) Made a to_key method which is taking string and converting to checksum256 and returning value as a key
-// 2)  Action  spendtokens - converted user field to checksum as the table subsuser_t has checksum as primary key assuming user contains the eth address. 
-// Removed for loop, as finding by  primary key will return a single row and modified the row as it was written.
-// 3) Action sendtoken - similar to spendtokens, converted all the string to checksum to find from table, assuming from and to will be eth address. 
-// (converted eth address to checksum256)
-// 4) Action addcommunity - added a new parameter ethaddress, to find data from community table, i.e subreddits_t. As the comm table also has the ethcs primary key.
-//  And changed the parameter name from 'symbol' to 'commsymbol'
-// 5) removed unused methods for now just for compilation and debugging purpose
-// 6) Removed all the unused services of liquidapps which were included, like vcpu, vaccount, cron
-//////////////////////////////////////////
 
 
 CONTRACT_END((createuser)(spendtokens)(sendtoken)(addcommunity))
