@@ -33,8 +33,6 @@ TABLE subscomm //used to get all users subbed to a community - subuser holds bal
   checksum256 ethcs;
   checksum256 primary_key() const { return ethcs; }
  };
-typedef dapp::advanced_multi_index<"subscomm"_n, subscomm, checksum256> subscomm_t;
-typedef eosio::multi_index<".subscomm"_n, subscomm> subscomm_t_v_abi;
 
 struct ethqueue
 {
@@ -54,9 +52,6 @@ TABLE queuetokens
   uint64_t primary_key() const { return queuenum; }
 };
 
-typedef dapp::multi_index<"queuetokens"_n, queuetokens> queuetokens_t;
-typedef eosio::multi_index<".queuetokens"_n, queuetokens> queuetokens_t_v_abi;
-
 TABLE subuser
 {
   checksum256 ethcs;
@@ -72,8 +67,6 @@ TABLE subuser
   checksum256 primary_key() const { return ethcs; }
 };
 
-typedef dapp::advanced_multi_index<"subuser"_n, subuser, checksum256> subuser_t;
-typedef eosio::multi_index<".subuser"_n, subuser> subuser_t_v_abi;
 
 TABLE subreddits
 {
@@ -87,8 +80,6 @@ TABLE subreddits
   checksum256 primary_key() const { return ethcs; }
 };
 
-typedef dapp::advanced_multi_index<"subreddits"_n, subreddits, checksum256> subreddits_t;
-typedef eosio::multi_index<".subreddits"_n, subreddits> subreddits_t_v_abi;
 
 TABLE redditusers
 {
@@ -98,34 +89,82 @@ TABLE redditusers
   checksum256 primary_key() const { return ethcs; }
 };
 
-typedef dapp::advanced_multi_index<"redditusers"_n, redditusers, checksum256> redditusers_t;
-typedef eosio::multi_index<".redditusers"_n, redditusers> redditusers_t_v_abi;
 
-TABLE lookupa
+TABLE lookup
 {
   checksum256 uname;
   string ethaddress;
   checksum256 primary_key() const { return uname; }
 };
 
-typedef dapp::advanced_multi_index<"lookupa"_n, lookupa, checksum256> lookupa_t;
-typedef eosio::multi_index<".lookupa"_n, lookupa> lookupa_t_v_abi;
 
-
-TABLE shardbucket
+TABLE subs_shardbucket
 {
   std::vector<char> shard_uri;
   uint64_t shard;
   uint64_t primary_key() const { return shard; }
 };
-typedef eosio::multi_index<"subscomm"_n, shardbucket> subscomm_t_abi;
-typedef eosio::multi_index<"queuetokens"_n, shardbucket> queuetokens_t_abi;
-typedef eosio::multi_index<"subuser"_n, shardbucket> subuser_t_abi;
-typedef eosio::multi_index<"subreddits"_n, shardbucket> subreddits_t_abi;
-typedef eosio::multi_index<"redditusers"_n, shardbucket> redditusers_t_abi;
-typedef eosio::multi_index<"lookupa"_n, shardbucket> lookupa_t_abi;
 
-//CRON JOB LOGIC
+typedef dapp::advanced_multi_index<"subscomm"_n, subscomm, checksum256> subscomm_t;
+typedef eosio::multi_index<"subscomm"_n, subs_shardbucket> subscomm_t_abi;
+typedef eosio::multi_index<".subscomm"_n, subscomm> subscomm_t_v_abi;
+
+TABLE qtok_shardbucket
+{
+  std::vector<char> shard_uri;
+  uint64_t shard;
+  uint64_t primary_key() const { return shard; }
+};
+
+typedef dapp::multi_index<"queuetokens"_n, queuetokens> queuetokens_t;
+typedef eosio::multi_index<"queuetokens"_n, qtok_shardbucket> queuetokens_t_abi;
+typedef eosio::multi_index<".queuetokens"_n, queuetokens> queuetokens_t_v_abi;
+
+
+TABLE sub_shardbucket
+{
+  std::vector<char> shard_uri;
+  uint64_t shard;
+  uint64_t primary_key() const { return shard; }
+};
+
+typedef dapp::advanced_multi_index<"subuser"_n, subuser, checksum256> subuser_t;
+typedef eosio::multi_index<"subuser"_n, sub_shardbucket> subuser_t_abi;
+typedef eosio::multi_index<".subuser"_n, subuser> subuser_t_v_abi;
+
+TABLE redd_shardbucket
+{
+  std::vector<char> shard_uri;
+  uint64_t shard;
+  uint64_t primary_key() const { return shard; }
+};
+
+typedef dapp::advanced_multi_index<"subreddits"_n, subreddits, checksum256> subreddits_t;
+typedef eosio::multi_index<"subreddits"_n, redd_shardbucket> subreddits_t_abi;
+typedef eosio::multi_index<".subreddits"_n, subreddits> subreddits_t_v_abi;
+
+TABLE user_shardbucket
+{
+  std::vector<char> shard_uri;
+  uint64_t shard;
+  uint64_t primary_key() const { return shard; }
+};
+
+typedef dapp::advanced_multi_index<"redditusers"_n, redditusers, checksum256> redditusers_t;
+typedef eosio::multi_index<"redditusers"_n, user_shardbucket> redditusers_t_abi;
+typedef eosio::multi_index<".redditusers"_n, redditusers> redditusers_t_v_abi;
+
+
+TABLE look_shardbucket
+{
+  std::vector<char> shard_uri;
+  uint64_t shard;
+  uint64_t primary_key() const { return shard; }
+};
+
+typedef dapp::advanced_multi_index<"lookup"_n, lookup, checksum256> lookup_t;
+typedef eosio::multi_index<"lookup"_n, look_shardbucket> lookup_t_abi;
+typedef eosio::multi_index<".lookup"_n, lookup> lookup_t_v_abi;
 
 bool timer_callback(name timer, std::vector<char> payload, uint32_t seconds){
         auto reschedule = false;
@@ -139,7 +178,7 @@ bool timer_callback(name timer, std::vector<char> payload, uint32_t seconds){
 {
   require_auth(_self);
   redditusers_t redusers(_self, _self.value);
-  lookupa_t lookref(_self, _self.value);
+  lookup_t lookref(_self, _self.value);
   checksum256 csname;
   checksum256 sum;
   sum = to_key(ethaddress);
@@ -237,5 +276,6 @@ static eosio::checksum256 to_key(string pkeystring)
   const uint64_t *ui64 = reinterpret_cast<const uint64_t *>(&pkeyadd);
   return eosio::checksum256::make_from_word_sequence<uint64_t>(ui64[0], ui64[1], ui64[2], ui64[3]);
 }
+
 
 CONTRACT_END((createuser)(spendtokens)(sendtoken))
